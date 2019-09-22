@@ -2,6 +2,7 @@ from typing import Optional, Dict, List, Any
 
 import allennlp
 import torch
+from allennlp.modules.seq2vec_encoders import CnnEncoder
 from allennlp.nn.util import get_text_field_mask
 from torch import nn
 from torch.nn import functional as F
@@ -10,10 +11,10 @@ from allennlp.models import Model
 from allennlp.modules import TextFieldEmbedder, FeedForward
 from allennlp.nn import InitializerApplicator, RegularizerApplicator
 from allennlp.training.metrics import CategoricalAccuracy
+from allennlp.nn.util import get_text_field_mask
 
-
-@Model.register("fever")
-class FEVERTextClassificationModel(Model):
+@Model.register("fever_cnn")
+class FEVERTextClassificationModelCnn(Model):
 
     def __init__(self,
                  vocab: Vocabulary,
@@ -28,6 +29,9 @@ class FEVERTextClassificationModel(Model):
         # Model components
         self._embedder = text_field_embedder
         self._feed_forward = final_feedforward
+
+        self._claim_encoder = CnnEncoder(embedding_dim=50, num_filters=100, output_dim=50)
+        self._evidence_encoder = CnnEncoder(embedding_dim=50, num_filters=100, output_dim=50)
 
         # For accuracy and loss for training/evaluation of model
         self._accuracy = CategoricalAccuracy()
@@ -76,11 +80,11 @@ class FEVERTextClassificationModel(Model):
         evidence_emb = self._embedder(evidence)
 
         # shape(batchsize, 50)
-        claim_mean = torch.mean(claim_emb, dim=1)
-        evidence_mean = torch.mean(evidence_emb, dim=1)
+        claim_enc = self._claim_encoder(claim_emb, mask=get_text_field_mask(claim))
+        evidence_enc = self._evidence_encoder(evidence_emb, mask=get_text_field_mask(evidence))
 
         # shape(batchsize, 100)
-        claim_and_evidence = torch.cat((claim_mean, evidence_mean), dim=1)
+        claim_and_evidence = torch.cat((claim_enc, evidence_enc), dim=1)
 
         # shape(batchsize, 2)
         label_logits = self._feed_forward(claim_and_evidence)

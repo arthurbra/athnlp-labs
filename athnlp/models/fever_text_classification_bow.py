@@ -12,8 +12,8 @@ from allennlp.nn import InitializerApplicator, RegularizerApplicator
 from allennlp.training.metrics import CategoricalAccuracy
 
 
-@Model.register("fever")
-class FEVERTextClassificationModel(Model):
+@Model.register("fever_bow")
+class FEVERTextClassificationModelBow(Model):
 
     def __init__(self,
                  vocab: Vocabulary,
@@ -28,6 +28,9 @@ class FEVERTextClassificationModel(Model):
         # Model components
         self._embedder = text_field_embedder
         self._feed_forward = final_feedforward
+
+        self.claim_project = nn.Linear(self._embedder.get_output_dim(), 50)
+        self.evidence_project = nn.Linear(self._embedder.get_output_dim(), 50)
 
         # For accuracy and loss for training/evaluation of model
         self._accuracy = CategoricalAccuracy()
@@ -71,16 +74,16 @@ class FEVERTextClassificationModel(Model):
             A scalar loss to be optimised.
         """
 
-        #shape(batchsize, seq_len, 50)
+        # shape(batchsize, bow)
         claim_emb = self._embedder(claim)
         evidence_emb = self._embedder(evidence)
 
         # shape(batchsize, 50)
-        claim_mean = torch.mean(claim_emb, dim=1)
-        evidence_mean = torch.mean(evidence_emb, dim=1)
+        claim_prj = self.claim_project(claim_emb)
+        evidence_prj = self.evidence_project(evidence_emb)
 
         # shape(batchsize, 100)
-        claim_and_evidence = torch.cat((claim_mean, evidence_mean), dim=1)
+        claim_and_evidence = torch.cat((claim_prj, evidence_prj), dim=1)
 
         # shape(batchsize, 2)
         label_logits = self._feed_forward(claim_and_evidence)

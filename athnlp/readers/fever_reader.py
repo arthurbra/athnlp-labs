@@ -25,6 +25,7 @@ class FEVERLiteDatasetReader(DatasetReader):
     def _read(self, file_path: str) -> Iterable[Instance]:
         logger.info("Reading FEVER instances from {}".format(file_path))
         with open(file_path,"r") as file:
+            #for line in file.readlines()[0:5]:
             for line in file:
                 json_line = json.loads(line)
                 yield self.text_to_instance(**json_line)
