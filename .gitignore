@@ -6,3 +6,10 @@ __pycache__/
 
 models/*
 #external_resources/*
+bert-base-uncased
+/resources/glove.6B.50d.txt.gz
+/.ipynb_checkpoints
+/fever
+/fever_bow_model
+/fever_cnn_model
+/fever_model
