@@ -159,6 +159,7 @@ def train(model, criterion, corpus, train_data, lr, bptt, epoch):
         # TODO: compute loss using the defined criterion obtaining 'loss'.
         loss = criterion(output.view(-1, ntokens), targets)
         # TODO: compute backpropagation calling the backward pass
+        # N.B.: Here you should also update your model's weights
         loss.backward()
         optimizer.step()
 
@@ -211,7 +212,10 @@ def main(args):
         ntokens = len(corpus.dictionary)
         model = RNNModel(args.model_type, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout)
         criterion = torch.nn.CrossEntropyLoss()
-
+        # In order to optimise your model weights you have two options:
+        # 1. Write the SGD update rule that uses the computed gradients to update the model's weights
+        # 2. Use a PyTorch optimiser that computes the update step (https://pytorch.org/docs/stable/optim.html)
+        
         # Loop over epochs.
         lr = args.lr
         best_val_loss = None
