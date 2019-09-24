@@ -4,6 +4,7 @@ import time
 
 import torch
 
+from athnlp.models.rnn_language_model import RNNModel
 from athnlp.readers.lm_corpus import Corpus
 
 parser = argparse.ArgumentParser(description='RNN/LSTM Language Model')
@@ -25,7 +26,7 @@ parser.add_argument('--clip', type=float, default=0.25,
                     help='gradient clipping')
 parser.add_argument('--epochs', type=int, default=100,
                     help='upper epoch limit')
-parser.add_argument('--batch_size', type=int, default=1, metavar='N',
+parser.add_argument('--batch_size', type=int, default=5, metavar='N',
                     help='batch size')
 parser.add_argument('--bptt', type=int, default=10,
                     help='sequence length')
@@ -37,7 +38,8 @@ parser.add_argument('--cuda', action='store_true',
                     help='use CUDA')
 parser.add_argument('--log-interval', type=int, default=200, metavar='N',
                     help='report interval')
-parser.add_argument("--sentence_compl", action='store_true')
+#parser.add_argument("--sentence_compl", action='store_true')
+parser.add_argument("--sentence_compl", action='store_false')
 
 
 # Starting from sequential data, batchify arranges the dataset into columns.
@@ -140,18 +142,25 @@ def train(model, criterion, corpus, train_data, lr, bptt, epoch):
     total_loss = 0.
     start_time = time.time()
     ntokens = len(corpus.dictionary)
+    # shape: 2 x (n-layers, batch size, hidden size)
     hidden = model.init_hidden(args.batch_size)
+
+    optimizer = torch.optim.SGD(model.parameters(), lr=lr)
+
     for batch, i in enumerate(range(0, train_data.size(0) - 1, args.bptt)):
+        # shape of data (seq_len, batch size)
         data, targets = get_batch(train_data, i, bptt)
         # Starting each batch, we detach the hidden state from how it was previously produced.
         # If we didn't, the model would try backpropagating all the way to start of the dataset.
         model.zero_grad()
         hidden = repackage_hidden(hidden)
         # TODO: run model forward pass obtaining '(output, hidden)'
-        output, hidden = None, None
+        output, hidden = model(data, hidden)
         # TODO: compute loss using the defined criterion obtaining 'loss'.
-        loss = None
+        loss = criterion(output.view(-1, ntokens), targets)
         # TODO: compute backpropagation calling the backward pass
+        loss.backward()
+        optimizer.step()
 
         # TODO (optional): implement gradient clipping to prevent
         # the exploding gradient problem in RNNs / LSTMs
@@ -199,9 +208,9 @@ def main(args):
         ###############################################################################
         # Build the model
         ###############################################################################
-        # TODO: model definition and loss definition
-        model = None
-        criterion = None
+        ntokens = len(corpus.dictionary)
+        model = RNNModel(args.model_type, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout)
+        criterion = torch.nn.CrossEntropyLoss()
 
         # Loop over epochs.
         lr = args.lr
@@ -257,8 +266,55 @@ def main(args):
         ###############################################################################
         # Use the pretrained LM at inference time
         ###############################################################################
+
         # TODO: Sentence completion solution
 
+        test_sentence = sentence_to_tensor(corpus, "The thief stole the suitcase . <eos>")
+        test_batch = batchify(test_sentence, batch_size=1, device=device)
+        print(test_batch)
+        print(test_batch.shape)
+        hidden = model.init_hidden(1)
+        output, hidden = model(test_batch, hidden)
+        result = torch.argmax(output, dim=2)
+        print(corpus.dictionary.word2idx)
+        print(result)
+
+        sentence_completion(corpus, model, device)
+
+def sentence_completion(corpus, model, device):
+    ntokens = len(corpus.dictionary)
+    # The ______ was arrested by the detective . <eos>
+    the_id = sentence_to_ids(corpus, "The")
+    rest_of_sentence_tokens = sentence_to_ids(corpus, "was arrested by the detective . <eos>")
+    for token_id in range(ntokens):
+        candidate_sentence = the_id + [token_id] + rest_of_sentence_tokens
+        print("candidate sentence: " + str(candidate_sentence))
+        candidate_sentence_batch = batchify(torch.tensor(candidate_sentence), batch_size=1, device=device)
+        candidate_sentence_output, _ = model(candidate_sentence_batch, model.init_hidden(1))
+
+        #shape (sent_len, vocab size)
+        candidate_sentence_output = candidate_sentence_output.view(-1, ntokens)
+
+        # calculate score for the candidate sentencescores.shape
+        score = 0
+        for i, tok_id in enumerate(candidate_sentence[0:-1]):
+            predicted_scores = candidate_sentence_output[i]
+            score += predicted_scores[candidate_sentence[i+1]].item()
+
+        print("Score of candidate sentence: " + str(score))
+
+
+def sentence_to_ids(corpus, sentence):
+    tokens = []
+    for t in sentence.split():
+        id = corpus.dictionary.word2idx[t.lower()]
+        tokens.append(id)
+    return tokens
+
+def sentence_to_tensor(corpus, sentence):
+    tokens = sentence_to_ids(corpus, sentence)
+    tokens_tensor = torch.tensor(tokens)
+    return tokens_tensor
 
 if __name__ == "__main__":
     args = parser.parse_args()

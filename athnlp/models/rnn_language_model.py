@@ -57,7 +57,19 @@ class RNNModel(nn.Module):
         :param hidden: previous hidden state of the RNN language model
         :return: output of the model
         """
-        pass
+
+        #shape of input: (seq_len, batch_size)
+
+        #shape (seq_len, batch size, embedded dim)
+        embedded = self.encoder(input)
+
+        # shape rrn_output: (seq_len, batch size, hidden size)
+        rnn_output, hidden_new = self.rnn(embedded, hidden)
+
+        # shape: (seq_len, batch size, vocabulary size)
+        output = self.decoder(rnn_output)
+
+        return output, hidden_new
 
     def init_hidden(self, bsz):
         """
