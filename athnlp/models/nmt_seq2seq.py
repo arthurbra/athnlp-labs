@@ -4,19 +4,21 @@ import numpy
 from overrides import overrides
 import torch
 import torch.nn.functional as F
+from torch.nn import Tanh
 from torch.nn.modules.linear import Linear
 from torch.nn.modules.rnn import LSTMCell
 from torch.nn.modules.rnn import GRUCell
 from allennlp.common.checks import ConfigurationError
 from allennlp.common.util import START_SYMBOL, END_SYMBOL
 from allennlp.data.vocabulary import Vocabulary
-from allennlp.modules import TextFieldEmbedder, Seq2SeqEncoder
+from allennlp.modules import TextFieldEmbedder, Seq2SeqEncoder, FeedForward
 from allennlp.models.model import Model
 from allennlp.modules.token_embedders import Embedding
 from allennlp.nn import util
 from allennlp.nn.beam_search import BeamSearch
 from allennlp.training.metrics import BLEU
-from allennlp.nn.util import masked_softmax
+from allennlp.nn.util import masked_softmax, weighted_sum
+
 
 @Model.register("nmt_seq2seq")
 class NmtSeq2Seq(Model):
@@ -121,7 +123,10 @@ class NmtSeq2Seq(Model):
         self._encoder_output_dim = self._encoder.get_output_dim()
         # self._decoder_output_dim = self._encoder_output_dim
 
-        self._decoder_input_dim = decoder["input_size"]
+        if self._attention:
+            self._decoder_input_dim = decoder["input_size"] + self._encoder_output_dim
+        else:
+            self._decoder_input_dim = decoder["input_size"]
         # If using attention make sure the .jsonnet params reflect this architecture:
         # input_to_decoder_rnn = [prev_word + attended_context_vector]
         self._decoder_output_dim = decoder['hidden_size']
@@ -136,6 +141,12 @@ class NmtSeq2Seq(Model):
             self._decoder_cell = LSTMCell(self._decoder_input_dim, self._decoder_output_dim)
         else:
             raise ValueError("Dialogue encoder of type {} not supported yet!".format(decoder_cell_type))
+
+        self._mlp_attention = FeedForward(
+            input_dim=self._encoder_output_dim + self._decoder_output_dim,
+            num_layers=1,
+            hidden_dims=self._encoder_output_dim,
+            activations=[Tanh])
 
         # We project the hidden state from the decoder into the output vocabulary space
         # in order to get log probabilities of each target token, at each time step.
@@ -408,8 +419,15 @@ class NmtSeq2Seq(Model):
         # shape: (group_size, target_embedding_dim)
         embedded_input = self._target_embedder(last_predictions)
 
-        # TODO: Compute attention right about here...
-        decoder_input = embedded_input
+        if self._attention:
+            # TODO: Compute attention right about here...
+            attention_context = self._compute_attention(
+                decoder_hidden_state=decoder_hidden,
+                encoder_outputs=encoder_outputs,
+                encoder_outputs_mask=source_mask)
+            decoder_input = torch.cat([embedded_input, attention_context], -1)
+        else:
+            decoder_input = embedded_input
 
         # shape (decoder_hidden): (batch_size, decoder_output_dim)
         # shape (decoder_context): (batch_size, decoder_output_dim)
@@ -462,8 +480,12 @@ class NmtSeq2Seq(Model):
         encoder_outputs_mask = encoder_outputs_mask.float()
 
         # Main body of attention weights computation here
+        scores = encoder_outputs.bmm(decoder_hidden_state.unsqueeze(-1)).squeeze()
 
-        return None
+        attention_weights = masked_softmax(scores, encoder_outputs_mask)
+        context = weighted_sum(encoder_outputs, attention_weights)
+
+        return context
 
     @staticmethod
     def _get_loss(logits: torch.LongTensor,

@@ -18,8 +18,8 @@
       }
     }
   },
-  "train_data_path": "data/multi30k/val.lc.norm.tok.head-750",
-  "validation_data_path": "data/multi30k/val.lc.norm.tok.head-250",
+  "train_data_path": "data/multi30k/val.lc.norm.tok.head-5",
+  "validation_data_path": "data/multi30k/val.lc.norm.tok.head-5",
   "model": {
     "type": "nmt_seq2seq",
     "source_embedder": {
@@ -33,9 +33,9 @@
       }
     },
     "target_namespace": "target_tokens",
-//    "attention" : {
-//      "type" : "dot_product"
-//    },
+    "attention" : {
+      "type" : "dot_product"
+    },
     "encoder": {
       "type": "lstm",
       "input_size": 50,
@@ -66,7 +66,7 @@
     "optimizer": "adam",
     "num_epochs": 100,
     "patience": 10,
-    "validation_metric": "-loss",
+    "validation_metric": "+BLEU",
     "cuda_device": -1
   }
 }
