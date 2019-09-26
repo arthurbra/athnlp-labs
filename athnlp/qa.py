@@ -9,7 +9,7 @@ from allennlp.commands import main
 if __name__ == "__main__":
     argparse = ArgumentParser()
     argparse.add_argument('-c', "--config_file", type=str, default='athnlp/experiments/qa_bert.jsonnet')
-    argparse.add_argument('-m', "--model_path", default="/tmp/debugger_train")
+    argparse.add_argument('-m', "--model_path", default="debugger_train_squad")
     argparse.add_argument('-i', "--input_file", default="data/squad/dev-v2.0-small.json")
     argparse.add_argument("--predict", action='store_true')
 

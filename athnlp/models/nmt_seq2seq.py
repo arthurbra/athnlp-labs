@@ -142,12 +142,6 @@ class NmtSeq2Seq(Model):
         else:
             raise ValueError("Dialogue encoder of type {} not supported yet!".format(decoder_cell_type))
 
-        self._mlp_attention = FeedForward(
-            input_dim=self._encoder_output_dim + self._decoder_output_dim,
-            num_layers=1,
-            hidden_dims=self._encoder_output_dim,
-            activations=[Tanh])
-
         # We project the hidden state from the decoder into the output vocabulary space
         # in order to get log probabilities of each target token, at each time step.
         self._output_projection_layer = Linear(self._decoder_output_dim, num_classes)

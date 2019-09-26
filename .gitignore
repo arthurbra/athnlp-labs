@@ -13,3 +13,4 @@ bert-base-uncased
 /fever_bow_model
 /fever_cnn_model
 /fever_model
+/debugger_train_squad
